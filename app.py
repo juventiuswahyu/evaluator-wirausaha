@@ -3,19 +3,19 @@ from groq import Groq
 import pypdf
 import pandas as pd
 import os
+import requests
 from datetime import datetime
 
 # --- KONFIGURASI HALAMAN & TEMA ---
 st.set_page_config(
     page_title="Portal Evaluasi Bisnis Wirausaha - UNKARTUR",
-    page_icon="💼",  # Icon Wirausaha
+    page_icon="💼",
     layout="wide"
 )
 
-# --- CUSTOM CSS UNTUK PEWARNAAN HALAMAN ---
+# --- CUSTOM CSS ---
 st.markdown("""
     <style>
-    /* Styling Header Utama */
     .main-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         padding: 24px;
@@ -35,24 +35,6 @@ st.markdown("""
         font-size: 14px;
         margin: 0;
     }
-    
-    /* Styling Section Card Container */
-    .section-box {
-        background-color: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-left: 5px solid #0284c7;
-        padding: 18px 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-    }
-    
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] {
-        background-color: #f1f5f9;
-        border-right: 1px solid #e2e8f0;
-    }
-    
-    /* Footer Styling */
     .footer-box {
         text-align: center;
         color: #64748b;
@@ -66,7 +48,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- AMBIL API KEY DARI STREAMLIT SECRETS ---
+# --- AMBIL SECRETS ---
 client = None
 try:
     groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -74,6 +56,8 @@ try:
     api_ready = True
 except Exception:
     api_ready = False
+
+gsheet_url = st.secrets.get("GOOGLE_SHEET_WEBAPP_URL", "")
 
 # --- HEADER UTAMA ---
 st.markdown("""
@@ -83,9 +67,9 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR DOSEN (TERKUNCI PIN) ---
+# --- SIDEBAR DOSEN ---
 st.sidebar.markdown("### 🔒 Panel Dosen / Evaluator")
-pin_input = st.sidebar.text_input("Masukkan PIN Dosen untuk Rekap:", type="password")
+pin_input = st.sidebar.text_input("Masukkan PIN Dosen untuk Rekap Local:", type="password")
 
 CSV_FILE = "rekap_nilai_wirausaha.csv"
 dosen_pin = st.secrets.get("DOSEN_PIN", "1234")
@@ -97,26 +81,24 @@ if pin_input == dosen_pin:
     
     if os.path.exists(CSV_FILE):
         df_rekap = pd.read_csv(CSV_FILE)
-        st.sidebar.metric(label="Total Laporan Masuk", value=f"{len(df_rekap)} Laporan")
+        st.sidebar.metric(label="Total Laporan Masuk (Lokal)", value=f"{len(df_rekap)} Laporan")
         st.sidebar.download_button(
-            label="📥 Download Rekap (CSV/Excel)",
+            label="📥 Download Rekap Local (CSV)",
             data=df_rekap.to_csv(index=False).encode('utf-8'),
             file_name=f"rekap_wirausaha_{datetime.now().strftime('%Y%m%d')}.csv",
             mime='text/csv',
             use_container_width=True
         )
     else:
-        st.sidebar.info("Belum ada data laporan masuk.")
+        st.sidebar.info("Belum ada data lokal.")
 else:
     if pin_input:
         st.sidebar.error("❌ PIN Salah!")
     else:
-        st.sidebar.info("📌 Panel ini khusus Dosen Pengampu. Mahasiswa silakan mengisi form laporan di area utama.")
+        st.sidebar.info("📌 Panel ini khusus Dosen Pengampu.")
 
 # --- FORM INPUT MAHASISWA ---
 with st.form("form_wirausaha", clear_on_submit=False):
-    
-    # Section 1
     st.markdown('### 👤 1. Identitas Kelompok')
     col1, col2 = st.columns(2)
     with col1:
@@ -127,7 +109,6 @@ with st.form("form_wirausaha", clear_on_submit=False):
 
     st.markdown("---")
 
-    # Section 2
     st.markdown('### 📈 2. Data Finansial & Operasional (Penjualan)')
     col_a, col_b, col_c = st.columns(3)
     with col_a:
@@ -141,24 +122,21 @@ with st.form("form_wirausaha", clear_on_submit=False):
 
     st.markdown("---")
 
-    # Section 3
     st.markdown('### 📄 3. Dokumen Business Model Canvas (BMC)')
     file_pdf = st.file_uploader("Upload PDF / Diagram BMC (Maksimal 2 MB):", type=["pdf"])
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Tombol Aksi
     col_btn1, col_btn2 = st.columns([3, 1])
     with col_btn1:
         submit_button = st.form_submit_button("🚀 Kirim & Evaluasi Laporan", use_container_width=True, type="primary")
     with col_btn2:
         reset_button = st.form_submit_button("🔄 Reset Form", use_container_width=True)
 
-# Jika tombol Reset ditekan
 if reset_button:
     st.rerun()
 
-# --- LOGIKA PEMROSESAN EVALUASI ---
+# --- LOGIKA PEMROSESAN EVALUASI & KIRIM KE GOOGLE SHEETS ---
 if submit_button:
     if not api_ready or client is None:
         st.error("⚠️ Sistem belum siap: `GROQ_API_KEY` belum dimasukkan di Streamlit Secrets.")
@@ -171,9 +149,9 @@ if submit_button:
             st.error("❌ Ukuran file melebihi 2 MB! Mohon kompres file PDF BMC Anda terlebih dahulu.")
             st.stop()
 
-        with st.spinner("⏳ Menghitung rasio finansial & menganalisis BMC dengan Groq AI..."):
+        with st.spinner("⏳ Menghitung rasio finansial, menganalisis BMC, & menyinkronkan data ke Google Sheets..."):
             try:
-                # 1. Perhitungan Otomatis via Python
+                # 1. Perhitungan Otomatis
                 margin_rp = harga_jual - hpp
                 margin_persen = (margin_rp / harga_jual) * 100 if harga_jual > 0 else 0
                 persen_capaian_target = (realisasi_unit / target_unit) * 100 if target_unit > 0 else 0
@@ -186,7 +164,7 @@ if submit_button:
                 for page in pdf_reader.pages:
                     text_bmc += page.extract_text() or ""
 
-                # 3. Prompt Khusus Groq AI
+                # 3. Prompt Groq AI
                 prompt = f"""
                 Bertindaklah sebagai Dosen Evaluator Bisnis Wirausaha Mahasiswa yang kritis, objektif, dan konstruktif.
                 Analisislah data bisnis dan teks BMC berikut:
@@ -240,20 +218,26 @@ if submit_button:
                 )
                 hasil_evaluasi = chat_completion.choices[0].message.content
 
-                # 5. Tampilkan Hasil ke Layar
-                st.success("✅ Evaluasi Laporan Berhasil Diselesaikan!")
-                st.markdown("---")
-                
-                # Metric Cards
-                col_m1, col_m2, col_m3 = st.columns(3)
-                col_m1.metric("Margin Keuntungan", f"{margin_persen:.1f}%", f"Rp {margin_rp:,.0f} / unit")
-                col_m2.metric("Capaian Target", f"{persen_capaian_target:.1f}%", f"{realisasi_unit} dari {target_unit} unit")
-                col_m3.metric("Total Profit", f"Rp {profit_total:,.0f}")
+                # 5. Kirim Data ke Google Sheets
+                if gsheet_url:
+                    payload = {
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "nim": nim,
+                        "nama": nama,
+                        "kelompok": kelompok,
+                        "hpp": hpp,
+                        "harga_jual": harga_jual,
+                        "margin_persen": f"{margin_persen:.1f}%",
+                        "capaian_target": f"{persen_capaian_target:.1f}%",
+                        "total_profit": profit_total,
+                        "evaluasi_ai": hasil_evaluasi
+                    }
+                    try:
+                        requests.post(gsheet_url, json=payload, timeout=5)
+                    except Exception as err_gsheet:
+                        st.warning(f"⚠️ Gagal menyinkronkan ke Google Sheets: {str(err_gsheet)}")
 
-                st.markdown("---")
-                st.markdown(hasil_evaluasi)
-
-                # 6. Simpan ke Rekap Excel Dosen
+                # 6. Simpan Juga ke File CSV Lokal
                 data_baru = pd.DataFrame([{
                     "Waktu_Submit": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "NIM": nim,
@@ -271,6 +255,18 @@ if submit_button:
                     data_baru.to_csv(CSV_FILE, index=False)
                 else:
                     data_baru.to_csv(CSV_FILE, mode='a', header=False, index=False)
+
+                # 7. Tampilkan Hasil
+                st.success("✅ Evaluasi Laporan Berhasil Diselesaikan & Data Tersimpan di Google Sheet!")
+                st.markdown("---")
+                
+                col_m1, col_m2, col_m3 = st.columns(3)
+                col_m1.metric("Margin Keuntungan", f"{margin_persen:.1f}%", f"Rp {margin_rp:,.0f} / unit")
+                col_m2.metric("Capaian Target", f"{persen_capaian_target:.1f}%", f"{realisasi_unit} dari {target_unit} unit")
+                col_m3.metric("Total Profit", f"Rp {profit_total:,.0f}")
+
+                st.markdown("---")
+                st.markdown(hasil_evaluasi)
 
             except Exception as e:
                 st.error(f"Terjadi kesalahan teknis: {str(e)}")
