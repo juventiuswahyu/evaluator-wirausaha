@@ -97,33 +97,36 @@ else:
     else:
         st.sidebar.info("📌 Panel ini khusus Dosen Pengampu.")
 
+# --- INIALISASI KUNCI FORM DI SESSION STATE ---
+keys_to_clear = ["input_nim", "input_nama", "input_kelompok", "input_hpp", "input_harga", "input_target", "input_realisasi", "input_deskripsi", "input_pdf"]
+
 # --- FORM INPUT MAHASISWA ---
 with st.form("form_wirausaha", clear_on_submit=False):
     st.markdown('### 👤 1. Identitas Kelompok')
     col1, col2 = st.columns(2)
     with col1:
-        nim = st.text_input("NIM Ketua / Perwakilan:")
-        nama = st.text_input("Nama Ketua / Perwakilan:")
+        nim = st.text_input("NIM Ketua / Perwakilan:", key="input_nim")
+        nama = st.text_input("Nama Ketua / Perwakilan:", key="input_nama")
     with col2:
-        kelompok = st.text_input("Nama Kelompok / Produk Bisnis:")
+        kelompok = st.text_input("Nama Kelompok / Produk Bisnis:", key="input_kelompok")
 
     st.markdown("---")
 
     st.markdown('### 📈 2. Data Finansial & Operasional (Penjualan)')
     col_a, col_b, col_c = st.columns(3)
     with col_a:
-        hpp = st.number_input("HPP per Unit (Rp):", min_value=0, step=1000)
-        harga_jual = st.number_input("Harga Jual per Unit (Rp):", min_value=0, step=1000)
+        hpp = st.number_input("HPP per Unit (Rp):", min_value=0, step=1000, key="input_hpp")
+        harga_jual = st.number_input("Harga Jual per Unit (Rp):", min_value=0, step=1000, key="input_harga")
     with col_b:
-        target_unit = st.number_input("Target Penjualan (Unit):", min_value=0, step=1)
-        realisasi_unit = st.number_input("Realisasi Penjualan (Unit):", min_value=0, step=1)
+        target_unit = st.number_input("Target Penjualan (Unit):", min_value=0, step=1, key="input_target")
+        realisasi_unit = st.number_input("Realisasi Penjualan (Unit):", min_value=0, step=1, key="input_realisasi")
     with col_c:
-        deskripsi = st.text_area("Deskripsi Singkat Produk & Target Pasar:", height=110, placeholder="Jelaskan produk, manfaat, serta keunggulan target pasar...")
+        deskripsi = st.text_area("Deskripsi Singkat Produk & Target Pasar:", height=110, placeholder="Jelaskan produk, manfaat, serta keunggulan target pasar...", key="input_deskripsi")
 
     st.markdown("---")
 
     st.markdown('### 📄 3. Dokumen Business Model Canvas (BMC)')
-    file_pdf = st.file_uploader("Upload PDF / Diagram BMC (Maksimal 2 MB):", type=["pdf"])
+    file_pdf = st.file_uploader("Upload PDF / Diagram BMC (Maksimal 2 MB):", type=["pdf"], key="input_pdf")
 
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -133,7 +136,11 @@ with st.form("form_wirausaha", clear_on_submit=False):
     with col_btn2:
         reset_button = st.form_submit_button("🔄 Reset Form", use_container_width=True)
 
+# --- FUNGSI HAPUS INPUT SAAT DITEKAN RESET ---
 if reset_button:
+    for k in keys_to_clear:
+        if k in st.session_state:
+            del st.session_state[k]
     st.rerun()
 
 # --- LOGIKA PEMROSESAN EVALUASI & KIRIM KE GOOGLE SHEETS ---
