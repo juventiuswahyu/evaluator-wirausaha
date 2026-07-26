@@ -7,7 +7,7 @@ from datetime import datetime
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
-    page_title="Portal Evaluasi Bisnis Wirausaha",
+    page_title="Portal Evaluasi Bisnis Wirausaha - UNKARTUR",
     page_icon="🎓",
     layout="wide"
 )
@@ -31,8 +31,6 @@ st.sidebar.header("🔒 Panel Dosen / Evaluator")
 pin_input = st.sidebar.text_input("Masukkan PIN Dosen untuk Rekap:", type="password")
 
 CSV_FILE = "rekap_nilai_wirausaha.csv"
-
-# Ambil PIN Dosen dari secrets (default '1234' jika belum diatur)
 dosen_pin = st.secrets.get("DOSEN_PIN", "1234")
 
 if pin_input == dosen_pin:
@@ -58,7 +56,7 @@ else:
         st.sidebar.info("Panel khusus Dosen. Mahasiswa silakan langsung isi form di sebelah kanan.")
 
 # --- FORM INPUT MAHASISWA ---
-with st.form("form_wirausaha"):
+with st.form("form_wirausaha", clear_on_submit=False):
     st.subheader("1. Identitas Kelompok")
     col1, col2 = st.columns(2)
     with col1:
@@ -82,9 +80,17 @@ with st.form("form_wirausaha"):
     st.subheader("3. Dokumen Business Model Canvas (BMC)")
     file_pdf = st.file_uploader("Upload PDF / Diagram BMC (Maksimal 2 MB):", type=["pdf"])
 
-    submit_button = st.form_submit_button("🚀 Kirim & Evaluasi Laporan")
+    col_btn1, col_btn2 = st.columns([3, 1])
+    with col_btn1:
+        submit_button = st.form_submit_button("🚀 Kirim & Evaluasi Laporan", use_container_width=True)
+    with col_btn2:
+        reset_button = st.form_submit_button("🔄 Reset Form", use_container_width=True)
 
-# --- LOGIKA PEMROSESAN ---
+# Jika tombol Reset ditekan
+if reset_button:
+    st.rerun()
+
+# --- LOGIKA PEMROSESAN EVALUASI ---
 if submit_button:
     if not api_ready or client is None:
         st.error("⚠️ Sistem belum siap: `GROQ_API_KEY` belum dimasukkan di Streamlit Secrets.")
@@ -93,7 +99,6 @@ if submit_button:
     elif hpp <= 0 or harga_jual <= 0:
         st.warning("⚠️ HPP dan Harga Jual harus lebih dari 0!")
     else:
-        # Pengecekan Ukuran File (Maksimal 2 MB)
         if file_pdf.size > 2 * 1024 * 1024:
             st.error("❌ Ukuran file melebihi 2 MB! Mohon kompres file PDF BMC Anda terlebih dahulu.")
             st.stop()
@@ -113,9 +118,9 @@ if submit_button:
                 for page in pdf_reader.pages:
                     text_bmc += page.extract_text() or ""
 
-                # 3. Prompt Khusus Groq AI
+                # 3. Prompt Khusus Groq AI (Indikasi AI Sudah Dihapus)
                 prompt = f"""
-                Bertindaklah sebagai Dosen Evaluator Bisnis Wirausaha Mahasiswa yang kritis dan konstruktif.
+                Bertindaklah sebagai Dosen Evaluator Bisnis Wirausaha Mahasiswa yang kritis, objektif, dan konstruktif.
                 Analisislah data bisnis dan teks BMC berikut:
 
                 --- DATA KELOMPOK ---
@@ -134,16 +139,13 @@ if submit_button:
                 --- TUGAS EVALUASI ---
                 Berikan umpan balik rapi dengan format Markdown berikut:
 
-                ### 1. Indikasi Penggunaan AI Writing
-                 Berikan estimasi % indikasi pola teks buatan AI beserta alasannya singkat.
-
-                ### 2. Analisis Kelayakan Produk & Finansial
+                ### 1. Analisis Kelayakan Produk & Finansial
                  Evaluasi kinerjanya berdasarkan angka omzet, margin ({margin_persen:.1f}%), dan pencapaian target ({persen_capaian_target:.1f}%).
 
-                ### 3. Koreksi 9 Elemen BMC
+                ### 2. Koreksi 9 Elemen BMC
                  Evaluasi keselarasan antar-elemen BMC (misal: apakah Value Proposition sesuai dengan Customer Segment dan Channels).
 
-                ### 4. Saran Strategis Ke Depan
+                ### 3. Saran Strategis Ke Depan
                  Berikan 2-3 langkah taktis pengembangan bisnis.
 
                 ### 📌 REKOMENDASI KELAYAKAN BISNIS
@@ -154,12 +156,12 @@ if submit_button:
                 (Sertakan alasan ringkas 1-2 kalimat).
                 """
 
-                # 4. Panggil Groq AI Model (Llama-3.3-70b)
+                # 4. Panggil Groq AI Model
                 chat_completion = client.chat.completions.create(
                     messages=[
                         {
                             "role": "system",
-                            "content": "Anda adalah Dosen Pengampu Kewirausahaan yang berpengalaman.",
+                            "content": "Anda adalah Dosen Pengampu Kewirausahaan yang berpengalaman di Universitas Nasional Karangturi Semarang.",
                         },
                         {
                             "role": "user",
@@ -174,7 +176,6 @@ if submit_button:
                 st.success("✅ Evaluasi Berhasil Diselesaikan!")
                 st.markdown("---")
                 
-                # Tampilkan Metric Ringkas
                 col_m1, col_m2, col_m3 = st.columns(3)
                 col_m1.metric("Margin Keuntungan", f"{margin_persen:.1f}%", f"Rp {margin_rp:,.0f}/unit")
                 col_m2.metric("Capaian Target", f"{persen_capaian_target:.1f}%", f"{realisasi_unit}/{target_unit} unit")
@@ -204,3 +205,15 @@ if submit_button:
 
             except Exception as e:
                 st.error(f"Terjadi kesalahan teknis: {str(e)}")
+
+# --- FOOTER HAK CIPTA ---
+st.markdown("---")
+st.markdown(
+    """
+    <div style="text-align: center; color: #64748b; font-size: 13px; padding: 10px;">
+        © 2026 <b>Tim Kewirausahaan Universitas Nasional Karangturi Semarang</b>. All Rights Reserved.<br>
+        <i>Sistem Informasi Evaluasi Wirausaha Berbasis Artificial Intelligence</i>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
