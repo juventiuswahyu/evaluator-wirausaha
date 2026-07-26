@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 import pypdf
 import pandas as pd
 import os
@@ -12,34 +12,50 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- AMBIL API KEY DARI STREAMLIT SECRETS ---
+client = None
+try:
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+    client = Groq(api_key=groq_api_key)
+    api_ready = True
+except Exception:
+    api_ready = False
+
 # --- HEADER ---
 st.title("🎓 Portal Evaluasi Laporan Wirausaha Mahasiswa")
 st.write("Silakan isi data keuangan, deskripsi bisnis, dan unggah dokumen BMC kelompok Anda.")
 st.markdown("---")
 
-# --- SIDEBAR DOSEN (API KEY & REKAP) ---
-st.sidebar.header("🔑 Panel Dosen / Evaluator")
-api_key = st.sidebar.text_input("Masukkan Gemini API Key:", type="password")
-
-if api_key:
-    genai.configure(api_key=api_key)
-
-st.sidebar.markdown("---")
-st.sidebar.header("📊 Rekapitulasi Nilai")
+# --- SIDEBAR DOSEN (TERKUNCI PIN) ---
+st.sidebar.header("🔒 Panel Dosen / Evaluator")
+pin_input = st.sidebar.text_input("Masukkan PIN Dosen untuk Rekap:", type="password")
 
 CSV_FILE = "rekap_nilai_wirausaha.csv"
 
-if os.path.exists(CSV_FILE):
-    df_rekap = pd.read_csv(CSV_FILE)
-    st.sidebar.write(f"Total Laporan Masuk: **{len(df_rekap)}**")
-    st.sidebar.download_button(
-        label="📥 Download Rekap (CSV/Excel)",
-        data=df_rekap.to_csv(index=False).encode('utf-8'),
-        file_name=f"rekap_wirausaha_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime='text/csv',
-    )
+# Ambil PIN Dosen dari secrets (default '1234' jika belum diatur)
+dosen_pin = st.secrets.get("DOSEN_PIN", "1234")
+
+if pin_input == dosen_pin:
+    st.sidebar.success("🔓 Akses Dosen Diterima")
+    st.sidebar.markdown("---")
+    st.sidebar.header("📊 Rekapitulasi Nilai")
+    
+    if os.path.exists(CSV_FILE):
+        df_rekap = pd.read_csv(CSV_FILE)
+        st.sidebar.write(f"Total Laporan Masuk: **{len(df_rekap)}**")
+        st.sidebar.download_button(
+            label="📥 Download Rekap (CSV/Excel)",
+            data=df_rekap.to_csv(index=False).encode('utf-8'),
+            file_name=f"rekap_wirausaha_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime='text/csv',
+        )
+    else:
+        st.sidebar.info("Belum ada data masuk.")
 else:
-    st.sidebar.info("Belum ada data masuk.")
+    if pin_input:
+        st.sidebar.error("❌ PIN Salah!")
+    else:
+        st.sidebar.info("Panel khusus Dosen. Mahasiswa silakan langsung isi form di sebelah kanan.")
 
 # --- FORM INPUT MAHASISWA ---
 with st.form("form_wirausaha"):
@@ -70,21 +86,21 @@ with st.form("form_wirausaha"):
 
 # --- LOGIKA PEMROSESAN ---
 if submit_button:
-    if not api_key:
-        st.error("⚠️ Sistem belum siap: Dosen perlu memasukkan API Key di sidebar kiri.")
+    if not api_ready or client is None:
+        st.error("⚠️ Sistem belum siap: `GROQ_API_KEY` belum dimasukkan di Streamlit Secrets.")
     elif not nim or not nama or not kelompok or not file_pdf:
         st.warning("⚠️ Mohon lengkapi seluruh data identitas dan unggah file PDF BMC!")
     elif hpp <= 0 or harga_jual <= 0:
         st.warning("⚠️ HPP dan Harga Jual harus lebih dari 0!")
     else:
-        # Pengecekan Ukuran File (Maksimal 2 MB = 2 * 1024 * 1024 bytes)
+        # Pengecekan Ukuran File (Maksimal 2 MB)
         if file_pdf.size > 2 * 1024 * 1024:
             st.error("❌ Ukuran file melebihi 2 MB! Mohon kompres file PDF BMC Anda terlebih dahulu.")
             st.stop()
 
-        with st.spinner("⏳ Menghitung margin & menganalisis BMC dengan AI..."):
+        with st.spinner("⏳ Menghitung margin & menganalisis BMC dengan Groq AI..."):
             try:
-                # 1. Perhitungan Otomatis via Python (100% Akurat)
+                # 1. Perhitungan Otomatis via Python
                 margin_rp = harga_jual - hpp
                 margin_persen = (margin_rp / harga_jual) * 100 if harga_jual > 0 else 0
                 persen_capaian_target = (realisasi_unit / target_unit) * 100 if target_unit > 0 else 0
@@ -97,7 +113,7 @@ if submit_button:
                 for page in pdf_reader.pages:
                     text_bmc += page.extract_text() or ""
 
-                # 3. Prompt Khusus Gemini AI
+                # 3. Prompt Khusus Groq AI
                 prompt = f"""
                 Bertindaklah sebagai Dosen Evaluator Bisnis Wirausaha Mahasiswa yang kritis dan konstruktif.
                 Analisislah data bisnis dan teks BMC berikut:
@@ -138,10 +154,21 @@ if submit_button:
                 (Sertakan alasan ringkas 1-2 kalimat).
                 """
 
-                # 4. Panggil Gemini Model
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                response = model.generate_content(prompt)
-                hasil_evaluasi = response.text
+                # 4. Panggil Groq AI Model (Llama-3.3-70b)
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Anda adalah Dosen Pengampu Kewirausahaan yang berpengalaman.",
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    model="llama-3.3-70b-versatile",
+                )
+                hasil_evaluasi = chat_completion.choices[0].message.content
 
                 # 5. Tampilkan Hasil ke Layar
                 st.success("✅ Evaluasi Berhasil Diselesaikan!")
