@@ -5,12 +5,66 @@ import pandas as pd
 import os
 from datetime import datetime
 
-# --- KONFIGURASI HALAMAN ---
+# --- KONFIGURASI HALAMAN & TEMA ---
 st.set_page_config(
     page_title="Portal Evaluasi Bisnis Wirausaha - UNKARTUR",
-    page_icon="🎓",
+    page_icon="💼",  # Icon Wirausaha
     layout="wide"
 )
+
+# --- CUSTOM CSS UNTUK PEWARNAAN HALAMAN ---
+st.markdown("""
+    <style>
+    /* Styling Header Utama */
+    .main-header {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        padding: 24px;
+        border-radius: 12px;
+        color: #ffffff;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .main-header h1 {
+        color: #38bdf8;
+        font-size: 26px;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+    .main-header p {
+        color: #cbd5e1;
+        font-size: 14px;
+        margin: 0;
+    }
+    
+    /* Styling Section Card Container */
+    .section-box {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-left: 5px solid #0284c7;
+        padding: 18px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #f1f5f9;
+        border-right: 1px solid #e2e8f0;
+    }
+    
+    /* Footer Styling */
+    .footer-box {
+        text-align: center;
+        color: #64748b;
+        font-size: 13px;
+        padding: 18px;
+        background-color: #f8fafc;
+        border-top: 2px solid #e2e8f0;
+        border-radius: 8px;
+        margin-top: 30px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- AMBIL API KEY DARI STREAMLIT SECRETS ---
 client = None
@@ -21,13 +75,16 @@ try:
 except Exception:
     api_ready = False
 
-# --- HEADER ---
-st.title("🎓 Portal Evaluasi Laporan Wirausaha Mahasiswa")
-st.write("Silakan isi data keuangan, deskripsi bisnis, dan unggah dokumen BMC kelompok Anda.")
-st.markdown("---")
+# --- HEADER UTAMA ---
+st.markdown("""
+    <div class="main-header">
+        <h1>💼 Portal Evaluasi Laporan Wirausaha Mahasiswa</h1>
+        <p>Sistem Evaluasi Kinerja Bisnis & Business Model Canvas (BMC) Berbasis Artificial Intelligence</p>
+    </div>
+""", unsafe_allow_html=True)
 
 # --- SIDEBAR DOSEN (TERKUNCI PIN) ---
-st.sidebar.header("🔒 Panel Dosen / Evaluator")
+st.sidebar.markdown("### 🔒 Panel Dosen / Evaluator")
 pin_input = st.sidebar.text_input("Masukkan PIN Dosen untuk Rekap:", type="password")
 
 CSV_FILE = "rekap_nilai_wirausaha.csv"
@@ -36,28 +93,31 @@ dosen_pin = st.secrets.get("DOSEN_PIN", "1234")
 if pin_input == dosen_pin:
     st.sidebar.success("🔓 Akses Dosen Diterima")
     st.sidebar.markdown("---")
-    st.sidebar.header("📊 Rekapitulasi Nilai")
+    st.sidebar.markdown("### 📊 Rekapitulasi Nilai")
     
     if os.path.exists(CSV_FILE):
         df_rekap = pd.read_csv(CSV_FILE)
-        st.sidebar.write(f"Total Laporan Masuk: **{len(df_rekap)}**")
+        st.sidebar.metric(label="Total Laporan Masuk", value=f"{len(df_rekap)} Laporan")
         st.sidebar.download_button(
             label="📥 Download Rekap (CSV/Excel)",
             data=df_rekap.to_csv(index=False).encode('utf-8'),
             file_name=f"rekap_wirausaha_{datetime.now().strftime('%Y%m%d')}.csv",
             mime='text/csv',
+            use_container_width=True
         )
     else:
-        st.sidebar.info("Belum ada data masuk.")
+        st.sidebar.info("Belum ada data laporan masuk.")
 else:
     if pin_input:
         st.sidebar.error("❌ PIN Salah!")
     else:
-        st.sidebar.info("Panel khusus Dosen. Mahasiswa silakan langsung isi form di sebelah kanan.")
+        st.sidebar.info("📌 Panel ini khusus Dosen Pengampu. Mahasiswa silakan mengisi form laporan di area utama.")
 
 # --- FORM INPUT MAHASISWA ---
 with st.form("form_wirausaha", clear_on_submit=False):
-    st.subheader("1. Identitas Kelompok")
+    
+    # Section 1
+    st.markdown('### 👤 1. Identitas Kelompok')
     col1, col2 = st.columns(2)
     with col1:
         nim = st.text_input("NIM Ketua / Perwakilan:")
@@ -65,7 +125,10 @@ with st.form("form_wirausaha", clear_on_submit=False):
     with col2:
         kelompok = st.text_input("Nama Kelompok / Produk Bisnis:")
 
-    st.subheader("2. Data Finansial & Operasional (Penjualan)")
+    st.markdown("---")
+
+    # Section 2
+    st.markdown('### 📈 2. Data Finansial & Operasional (Penjualan)')
     col_a, col_b, col_c = st.columns(3)
     with col_a:
         hpp = st.number_input("HPP per Unit (Rp):", min_value=0, step=1000)
@@ -74,15 +137,20 @@ with st.form("form_wirausaha", clear_on_submit=False):
         target_unit = st.number_input("Target Penjualan (Unit):", min_value=0, step=1)
         realisasi_unit = st.number_input("Realisasi Penjualan (Unit):", min_value=0, step=1)
     with col_c:
-        st.write("**Keterangan Tambahan:**")
-        deskripsi = st.text_area("Deskripsi Singkat Produk & Target Pasar:", height=100)
+        deskripsi = st.text_area("Deskripsi Singkat Produk & Target Pasar:", height=110, placeholder="Jelaskan produk, manfaat, serta keunggulan target pasar...")
 
-    st.subheader("3. Dokumen Business Model Canvas (BMC)")
+    st.markdown("---")
+
+    # Section 3
+    st.markdown('### 📄 3. Dokumen Business Model Canvas (BMC)')
     file_pdf = st.file_uploader("Upload PDF / Diagram BMC (Maksimal 2 MB):", type=["pdf"])
 
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Tombol Aksi
     col_btn1, col_btn2 = st.columns([3, 1])
     with col_btn1:
-        submit_button = st.form_submit_button("🚀 Kirim & Evaluasi Laporan", use_container_width=True)
+        submit_button = st.form_submit_button("🚀 Kirim & Evaluasi Laporan", use_container_width=True, type="primary")
     with col_btn2:
         reset_button = st.form_submit_button("🔄 Reset Form", use_container_width=True)
 
@@ -103,7 +171,7 @@ if submit_button:
             st.error("❌ Ukuran file melebihi 2 MB! Mohon kompres file PDF BMC Anda terlebih dahulu.")
             st.stop()
 
-        with st.spinner("⏳ Menghitung margin & menganalisis BMC dengan Groq AI..."):
+        with st.spinner("⏳ Menghitung rasio finansial & menganalisis BMC dengan Groq AI..."):
             try:
                 # 1. Perhitungan Otomatis via Python
                 margin_rp = harga_jual - hpp
@@ -118,7 +186,7 @@ if submit_button:
                 for page in pdf_reader.pages:
                     text_bmc += page.extract_text() or ""
 
-                # 3. Prompt Khusus Groq AI (Indikasi AI Sudah Dihapus)
+                # 3. Prompt Khusus Groq AI
                 prompt = f"""
                 Bertindaklah sebagai Dosen Evaluator Bisnis Wirausaha Mahasiswa yang kritis, objektif, dan konstruktif.
                 Analisislah data bisnis dan teks BMC berikut:
@@ -140,13 +208,13 @@ if submit_button:
                 Berikan umpan balik rapi dengan format Markdown berikut:
 
                 ### 1. Analisis Kelayakan Produk & Finansial
-                 Evaluasi kinerjanya berdasarkan angka omzet, margin ({margin_persen:.1f}%), dan pencapaian target ({persen_capaian_target:.1f}%).
+                Evaluasi kinerjanya berdasarkan angka omzet, margin ({margin_persen:.1f}%), dan pencapaian target ({persen_capaian_target:.1f}%).
 
                 ### 2. Koreksi 9 Elemen BMC
-                 Evaluasi keselarasan antar-elemen BMC (misal: apakah Value Proposition sesuai dengan Customer Segment dan Channels).
+                Evaluasi keselarasan antar-elemen BMC (misal: apakah Value Proposition sesuai dengan Customer Segment dan Channels).
 
                 ### 3. Saran Strategis Ke Depan
-                 Berikan 2-3 langkah taktis pengembangan bisnis.
+                Berikan 2-3 langkah taktis pengembangan bisnis.
 
                 ### 📌 REKOMENDASI KELAYAKAN BISNIS
                 PILIH TEPAT SATU dari 3 predikat di bawah ini dan tuliskan dengan tebal:
@@ -173,12 +241,13 @@ if submit_button:
                 hasil_evaluasi = chat_completion.choices[0].message.content
 
                 # 5. Tampilkan Hasil ke Layar
-                st.success("✅ Evaluasi Berhasil Diselesaikan!")
+                st.success("✅ Evaluasi Laporan Berhasil Diselesaikan!")
                 st.markdown("---")
                 
+                # Metric Cards
                 col_m1, col_m2, col_m3 = st.columns(3)
-                col_m1.metric("Margin Keuntungan", f"{margin_persen:.1f}%", f"Rp {margin_rp:,.0f}/unit")
-                col_m2.metric("Capaian Target", f"{persen_capaian_target:.1f}%", f"{realisasi_unit}/{target_unit} unit")
+                col_m1.metric("Margin Keuntungan", f"{margin_persen:.1f}%", f"Rp {margin_rp:,.0f} / unit")
+                col_m2.metric("Capaian Target", f"{persen_capaian_target:.1f}%", f"{realisasi_unit} dari {target_unit} unit")
                 col_m3.metric("Total Profit", f"Rp {profit_total:,.0f}")
 
                 st.markdown("---")
@@ -207,13 +276,9 @@ if submit_button:
                 st.error(f"Terjadi kesalahan teknis: {str(e)}")
 
 # --- FOOTER HAK CIPTA ---
-st.markdown("---")
-st.markdown(
-    """
-    <div style="text-align: center; color: #64748b; font-size: 13px; padding: 10px;">
+st.markdown("""
+    <div class="footer-box">
         © 2026 <b>Tim Kewirausahaan Universitas Nasional Karangturi Semarang</b>. All Rights Reserved.<br>
-        <i>Sistem Informasi Evaluasi Wirausaha Berbasis Artificial Intelligence</i>
+        <span style="font-size:12px; color:#94a3b8;">Sistem Informasi Evaluasi Wirausaha Berbasis Artificial Intelligence</span>
     </div>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
