@@ -109,6 +109,15 @@ with st.form("evaluasi_form"):
             height=130
         )
 
+    st.markdown("---")
+
+    # Section 3: Upload Document Business Model Canvas (BMC)
+    st.markdown("### 📑 3. Upload Business Model Canvas (BMC)")
+    bmc_file = st.file_uploader(
+        "Upload Dokumen BMC (Format Gambar JPG/PNG atau PDF):", 
+        type=["jpg", "jpeg", "png", "pdf"]
+    )
+
     submit_btn = st.form_submit_button("⚡ Analisis Laporan Wirausaha", type="primary", use_container_width=True)
 
 # Proses AI & Perhitungan Finansial Berbasis Rupiah
@@ -129,7 +138,9 @@ if submit_btn:
         margin_ratio = (margin_per_unit / harga_jual) if harga_jual > 0 else 0
         estimasi_laba_kotor = realisasi_penjualan_rp * margin_ratio
 
-        # Prompt AI difokuskan penuh pada Angka Rupiah
+        status_bmc = "Dokumen BMC Terlampir" if bmc_file is not None else "Dokumen BMC Belum Diunggah"
+
+        # Prompt AI difokuskan pada Nominal Rupiah & Evaluasi BMC
         prompt = (
             f"Kamu Dosen Evaluator Kewirausahaan. Berikan analisis kinerja keuangan dan operasional bisnis mahasiswa berikut.\n\n"
             f"**DATA BISNIS:**\n"
@@ -140,12 +151,14 @@ if submit_btn:
             f"- Realisasi Penjualan (Nominal): Rp {realisasi_penjualan_rp:,.0f}\n"
             f"- Pencapaian Target: {pencapaian_persen:.1f}%\n"
             f"- Selisih Target (Rupiah): Rp {selisih_rp:,.0f}\n"
-            f"- Estimasi Laba Kotor: Rp {estimasi_laba_kotor:,.0f}\n\n"
+            f"- Estimasi Laba Kotor: Rp {estimasi_laba_kotor:,.0f}\n"
+            f"- Status Lampiran BMC: {status_bmc}\n\n"
             f"**INSTRUKSI FORMAT JAWABAN:**\n"
             f"1. **📊 Evaluasi Capaian Penjualan (Rupiah)**: Bahas kinerja omset secara singkat berbasis nominal rupiah dan persentase capaian target.\n"
             f"2. **💰 Analisis Profitabilitas (Rupiah)**: Evaluasi estimasi laba kotor, struktur HPP vs Harga Jual, serta ketahanan margin rupiah bisnis ini.\n"
-            f"3. **💡 Saran Strategis Pengembangan**: Berikan 2-3 rekomendasi konkret untuk meningkatkan pendapatan rupiah pada periode berikutnya.\n"
-            f"4. **🎓 Catatan Evaluator**: 1-2 kalimat apresiasi dan motivasi untuk kelompok mahasiswa."
+            f"3. **🎯 Alignment Business Model Canvas (BMC)**: Evaluasi kesesuaian antara model bisnis dengan realisasi penjualan rupiah yang dicapai.\n"
+            f"4. **💡 Saran Strategis Pengembangan**: Berikan 2-3 rekomendasi konkret untuk meningkatkan pendapatan rupiah pada periode berikutnya.\n"
+            f"5. **🎓 Catatan Evaluator**: 1-2 kalimat apresiasi dan motivasi untuk kelompok mahasiswa."
         )
 
         try:
@@ -155,7 +168,7 @@ if submit_btn:
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
                     model="llama-3.1-8b-instant",
-                    max_tokens=600,
+                    max_tokens=650,
                     temperature=0.5,
                 )
                 res_text = chat_completion.choices[0].message.content
@@ -167,6 +180,11 @@ if submit_btn:
             m2.metric("Realisasi Omset", f"Rp {realisasi_penjualan_rp:,.0f}", f"{pencapaian_persen:.1f}% Target")
             m3.metric("Selisih Omset", f"Rp {selisih_rp:,.0f}")
             m4.metric("Est. Laba Kotor", f"Rp {estimasi_laba_kotor:,.0f}")
+
+            # Menampilkan File Preview jika gambar diunggah
+            if bmc_file is not None and bmc_file.type in ["image/jpeg", "image/png", "image/jpg"]:
+                st.markdown("### 🖼️ Preview Dokumen BMC")
+                st.image(bmc_file, use_container_width=True)
 
             # Display Hasil Evaluasi AI
             st.markdown(
