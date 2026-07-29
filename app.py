@@ -66,12 +66,39 @@ st.markdown(
 
 api_key = st.secrets.get("GROQ_API_KEY")
 
+
+# Fungsi Backend Connect ke Google Sheet via Google Form Resmi Bapak
+def save_to_google_sheets(
+    nim, nama_ketua, nama_bisnis, hpp, harga_jual, target_rp, realisasi_rp, deskripsi, hasil
+):
+    try:
+        form_url = "https://docs.google.com/forms/d/e/1FAIpQLSc3Q_UxoSzV5BgfHQmK_uOgBFqqghpHQvPi50F4_wWwjn-0sA/formResponse"
+        
+        payload = {
+            "entry.495102142": f"'{nim}",
+            "entry.340938171": nama_ketua,
+            "entry.1621846743": nama_bisnis,
+            "entry.1388059819": hpp,
+            "entry.1069542435": harga_jual,
+            "entry.1927012727": target_rp,
+            "entry.2090669380": realisasi_rp,
+            "entry.1001698584": deskripsi,
+            "entry.1202055101": hasil
+        }
+        
+        requests.post(form_url, data=payload)
+        return True
+    except Exception as e:
+        print(f"Gagal simpan ke Google Form: {e}")
+        return False
+
+
 # --- HEADER BANNER ---
 st.markdown(
     """
     <div class="hero-container">
         <div class="hero-title">💼 Portal Evaluasi Laporan Wirausaha Mahasiswa</div>
-        <div class="hero-subtitle">Sistem Evaluasi Kinerja Bisnis & Business Model Canvas (BMC) Berbasis Artificial Intelligence</div>
+        <div class="hero-subtitle">Sistem Evaluasi Kinerja Bisnis Berbasis Artificial Intelligence</div>
     </div>
 """,
     unsafe_allow_html=True,
@@ -89,7 +116,7 @@ with st.form("evaluasi_form"):
 
     st.markdown("---")
 
-    # Section 2: Data Finansial & Operasional (Dalam Rupiah)
+    # Section 2: Data Finansial & Operasional (Rupiah)
     st.markdown("### 📈 2. Data Finansial & Operasional (Penjualan)")
     
     col_f1, col_f2, col_f3 = st.columns([1, 1, 1.2])
@@ -109,18 +136,9 @@ with st.form("evaluasi_form"):
             height=130
         )
 
-    st.markdown("---")
-
-    # Section 3: Upload Document Business Model Canvas (BMC)
-    st.markdown("### 📑 3. Upload Business Model Canvas (BMC)")
-    bmc_file = st.file_uploader(
-        "Upload Dokumen BMC (Format Gambar JPG/PNG atau PDF):", 
-        type=["jpg", "jpeg", "png", "pdf"]
-    )
-
     submit_btn = st.form_submit_button("⚡ Analisis Laporan Wirausaha", type="primary", use_container_width=True)
 
-# Proses AI & Perhitungan Finansial Berbasis Rupiah
+# Proses AI & Backend Simpan Data
 if submit_btn:
     if not nim or not nama_ketua or not nama_bisnis:
         st.warning("⚠️ Mohon lengkapi data Identitas Kelompok terlebih dahulu!")
@@ -133,14 +151,11 @@ if submit_btn:
         pencapaian_persen = (realisasi_penjualan_rp / target_penjualan_rp) * 100
         selisih_rp = realisasi_penjualan_rp - target_penjualan_rp
         
-        # Margin dan estimasi laba kotor
         margin_per_unit = harga_jual - hpp
         margin_ratio = (margin_per_unit / harga_jual) if harga_jual > 0 else 0
         estimasi_laba_kotor = realisasi_penjualan_rp * margin_ratio
 
-        status_bmc = "Dokumen BMC Terlampir" if bmc_file is not None else "Dokumen BMC Belum Diunggah"
-
-        # Prompt AI difokuskan pada Nominal Rupiah & Evaluasi BMC
+        # Prompt AI Focus Rupiah
         prompt = (
             f"Kamu Dosen Evaluator Kewirausahaan. Berikan analisis kinerja keuangan dan operasional bisnis mahasiswa berikut.\n\n"
             f"**DATA BISNIS:**\n"
@@ -151,14 +166,12 @@ if submit_btn:
             f"- Realisasi Penjualan (Nominal): Rp {realisasi_penjualan_rp:,.0f}\n"
             f"- Pencapaian Target: {pencapaian_persen:.1f}%\n"
             f"- Selisih Target (Rupiah): Rp {selisih_rp:,.0f}\n"
-            f"- Estimasi Laba Kotor: Rp {estimasi_laba_kotor:,.0f}\n"
-            f"- Status Lampiran BMC: {status_bmc}\n\n"
+            f"- Estimasi Laba Kotor: Rp {estimasi_laba_kotor:,.0f}\n\n"
             f"**INSTRUKSI FORMAT JAWABAN:**\n"
             f"1. **📊 Evaluasi Capaian Penjualan (Rupiah)**: Bahas kinerja omset secara singkat berbasis nominal rupiah dan persentase capaian target.\n"
             f"2. **💰 Analisis Profitabilitas (Rupiah)**: Evaluasi estimasi laba kotor, struktur HPP vs Harga Jual, serta ketahanan margin rupiah bisnis ini.\n"
-            f"3. **🎯 Alignment Business Model Canvas (BMC)**: Evaluasi kesesuaian antara model bisnis dengan realisasi penjualan rupiah yang dicapai.\n"
-            f"4. **💡 Saran Strategis Pengembangan**: Berikan 2-3 rekomendasi konkret untuk meningkatkan pendapatan rupiah pada periode berikutnya.\n"
-            f"5. **🎓 Catatan Evaluator**: 1-2 kalimat apresiasi dan motivasi untuk kelompok mahasiswa."
+            f"3. **💡 Saran Strategis Pengembangan**: Berikan 2-3 rekomendasi konkret untuk meningkatkan pendapatan rupiah pada periode berikutnya.\n"
+            f"4. **🎓 Catatan Evaluator**: 1-2 kalimat apresiasi dan motivasi untuk kelompok mahasiswa."
         )
 
         try:
@@ -168,12 +181,18 @@ if submit_btn:
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
                     model="llama-3.1-8b-instant",
-                    max_tokens=650,
+                    max_tokens=600,
                     temperature=0.5,
                 )
                 res_text = chat_completion.choices[0].message.content
 
-            # Display Ringkasan Metrik Finansial
+            # Simpan Data ke Google Sheet via Google Form Backend
+            save_to_google_sheets(
+                nim, nama_ketua, nama_bisnis, hpp, harga_jual, 
+                target_penjualan_rp, realisasi_penjualan_rp, deskripsi_produk, res_text
+            )
+
+            # Ringkasan Finansial
             st.markdown("### 📊 Ringkasan Finansial Bisnis")
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Target Omset", f"Rp {target_penjualan_rp:,.0f}")
@@ -181,12 +200,7 @@ if submit_btn:
             m3.metric("Selisih Omset", f"Rp {selisih_rp:,.0f}")
             m4.metric("Est. Laba Kotor", f"Rp {estimasi_laba_kotor:,.0f}")
 
-            # Menampilkan File Preview jika gambar diunggah
-            if bmc_file is not None and bmc_file.type in ["image/jpeg", "image/png", "image/jpg"]:
-                st.markdown("### 🖼️ Preview Dokumen BMC")
-                st.image(bmc_file, use_container_width=True)
-
-            # Display Hasil Evaluasi AI
+            # Hasil Evaluasi
             st.markdown(
                 f"""
                 <div class="eval-card">
@@ -198,6 +212,7 @@ if submit_btn:
                 unsafe_allow_html=True,
             )
             st.markdown(res_text)
+            st.toast("✅ Laporan berhasil dianalisis & disimpan ke Google Sheets!", icon="💾")
 
         except Exception as e:
             st.error(f"Terjadi kesalahan saat memproses analisis: {e}")
