@@ -75,20 +75,24 @@ def save_to_google_sheets(
     try:
         form_url = "https://docs.google.com/forms/d/e/1FAIpQLSc3Q_UxoSzV5BgfHQmK_uOgBFqqghpHQvPi50F4_wWwjn-0sA/formResponse"
         
-        payload = {
-            "entry.495102142": f"'{nim}",
-            "entry.340938171": nama_ketua,
-            "entry.1621846743": nama_bisnis,
-            "entry.1388059819": hpp,
-            "entry.1069542435": harga_jual,
-            "entry.1927012727": target_rp,
-            "entry.2090669380": realisasi_rp,
-            "entry.1001698584": deskripsi,
-            "entry.1202055101": hasil
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
         }
         
-        requests.post(form_url, data=payload)
-        return True
+        payload = {
+            "entry.495102142": f"'{nim}",
+            "entry.340938171": str(nama_ketua),
+            "entry.1621846743": str(nama_bisnis),
+            "entry.1388059819": str(hpp),
+            "entry.1069542435": str(harga_jual),
+            "entry.1927012727": str(target_rp),
+            "entry.2090669380": str(realisasi_rp),
+            "entry.1001698584": str(deskripsi),
+            "entry.1202055101": str(hasil)
+        }
+        
+        response = requests.post(form_url, data=payload, headers=headers, timeout=10)
+        return response.status_code == 200
     except Exception as e:
         print(f"Gagal simpan ke Google Form: {e}")
         return False
@@ -209,7 +213,7 @@ if submit_btn:
                 res_text = chat_completion.choices[0].message.content
 
             # Simpan Data ke Google Sheet via Google Form Backend
-            save_to_google_sheets(
+            is_saved = save_to_google_sheets(
                 nim, nama_ketua, nama_bisnis, hpp, harga_jual, 
                 target_penjualan_rp, realisasi_penjualan_rp, deskripsi_produk, res_text
             )
@@ -234,7 +238,11 @@ if submit_btn:
                 unsafe_allow_html=True,
             )
             st.markdown(res_text)
-            st.toast("✅ Laporan berhasil dianalisis & disimpan ke Google Sheets!", icon="💾")
+            
+            if is_saved:
+                st.toast("✅ Laporan berhasil dianalisis & disimpan ke Google Sheets!", icon="💾")
+            else:
+                st.toast("⚠️ Hasil analisis selesai, tetapi gagal menyimpan ke Google Sheets.", icon="⚠️")
 
         except Exception as e:
             st.error(f"Terjadi kesalahan saat memproses analisis: {e}")
